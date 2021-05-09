@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-
+# a city represents a gene
 class City:
     def __init__(self, x, y):
         self.x = x
@@ -20,6 +20,8 @@ class City:
     def __repr__(self):
         return "(" + str(self.x) + "," + str(self.y) + ")"
 
+
+#we treat the fitness as the inverse of the route distance. We want to minimize route distance, so a larger fitness score is better. 
 class Fitness:
     def __init__(self, route):
         self.route = route
@@ -32,6 +34,7 @@ class Fitness:
             for i in range(0, len(self.route)):
                 fromCity = self.route[i]
                 toCity = None
+                #We must return to the starting city, so our total distance needs to be calculated accordingly
                 if i + 1 < len(self.route):
                     toCity = self.route[i + 1]
                 else:
@@ -48,17 +51,21 @@ class Fitness:
 
 
 def createRoute(cityList):
+    # we randomly select the order in which we visit each city
     route = random.sample(cityList, len(cityList))
     return route
 
+# creates an ordered list with the route IDs and each associated fitness score.
 def rankRoutes(population):
     fitnessResults = {}
     for i in range(0,len(population)):
         fitnessResults[i] = Fitness(population[i]).routeFitness()
     return sorted(fitnessResults.items(), key = operator.itemgetter(1), reverse = True)
 
+# returns a list of route IDs, which we can use to create the mating pool in the matingPool function.
 def selection(popRanked, eliteSize):
     selectionResults = []
+    # we set up the roulette wheel by calculating a relative fitness weight for each individual.
     df = pd.DataFrame(np.array(popRanked), columns=["Index","Fitness"])
     df['cum_sum'] = df.Fitness.cumsum()
     df['cum_perc'] = 100*df.cum_sum/df.Fitness.sum()
@@ -66,6 +73,7 @@ def selection(popRanked, eliteSize):
     for i in range(0, eliteSize):
         selectionResults.append(popRanked[i][0])
     for i in range(0, len(popRanked) - eliteSize):
+        # we pick a randomly number and compare it to fitness weights to select our mating pool
         pick = 100*random.random()
         for i in range(0, len(popRanked)):
             if pick <= df.iat[i,3]:
@@ -75,17 +83,19 @@ def selection(popRanked, eliteSize):
 
 
 def matingPool(population, selectionResults):
+    # extracting the selected individuals from our population.
     matingpool = []
     for i in range(0, len(selectionResults)):
         index = selectionResults[i]
         matingpool.append(population[index])
     return matingpool
 
-def breed(parent1, parent2):
+def crossover(parent1, parent2):
     child = []
     childP1 = []
     childP2 = []
     
+    # randomly select a subset of the first parent
     geneA = int(random.random() * len(parent1))
     geneB = int(random.random() * len(parent1))
     
@@ -95,27 +105,33 @@ def breed(parent1, parent2):
     for i in range(startGene, endGene):
         childP1.append(parent1[i])
         
+    #  fill the remainder of the route with the genes from the second parent in the order in which they appear,
+    #  without duplicating any genes in the selected subset from the first parent
     childP2 = [item for item in parent2 if item not in childP1]
 
     child = childP1 + childP2
     return child
 
-def breedPopulation(matingpool, eliteSize):
+def crossoverPopulation(matingpool, eliteSize):
     children = []
     length = len(matingpool) - eliteSize
     pool = random.sample(matingpool, len(matingpool))
 
+    # retain the best routes from the current population
     for i in range(0,eliteSize):
         children.append(matingpool[i])
     
     for i in range(0, length):
-        child = breed(pool[i], pool[len(matingpool)-i-1])
+        # fill out the rest of the next generation.
+        child = crossover(pool[i], pool[len(matingpool)-i-1])
         children.append(child)
     return children
 
+# swap cities with a lower than mutationRate in order to get a new route 
 def mutate(individual, mutationRate):
     for swapped in range(len(individual)):
         if(random.random() < mutationRate):
+            # swap cities in order to not lose any of them
             swapWith = int(random.random() * len(individual))
             
             city1 = individual[swapped]
@@ -135,11 +151,11 @@ def mutatePopulation(population, mutationRate):
 
 
 def nextGeneration(currentGen, eliteSize, mutationRate):
-    popRanked = rankRoutes(currentGen)
-    selectionResults = selection(popRanked, eliteSize)
-    matingpool = matingPool(currentGen, selectionResults)
-    children = breedPopulation(matingpool, eliteSize)
-    nextGeneration = mutatePopulation(children, mutationRate)
+    popRanked = rankRoutes(currentGen) # rank routes from current generation
+    selectionResults = selection(popRanked, eliteSize) # determine potential parents 
+    matingpool = matingPool(currentGen, selectionResults) # create the mating pool
+    children = crossoverPopulation(matingpool, eliteSize) # crate the new generation
+    nextGeneration = mutatePopulation(children, mutationRate) # apply mutation
     return nextGeneration
 
 def geneticAlgorithm(population, popSize, eliteSize, mutationRate, generations):
@@ -155,7 +171,7 @@ def geneticAlgorithm(population, popSize, eliteSize, mutationRate, generations):
     return bestRoute
 
 
-
+# create a population with as many routes as popSize
 def initialPopulation(popSize, cityList):
     population = []
 
